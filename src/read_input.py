@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
+from numpy import arctan
+
 
 
 def input_data(input_file):
@@ -43,10 +45,31 @@ def get_clusters(data, c):
     return kmeans.cluster_centers_
 
 
+def net_classification(PINS_COORD, n_nets, p = None):
+    #if not p:
+
+    section_size = 180/n_nets
+
+    sections = []
+    for x, y in PINS_COORD:
+        delta_0 = x - p[0]
+        delta_1 = y - p[1]
+        tan_ang = delta_1 / delta_0
+        ang = arctan(tan_ang)
+        section = int(ang/section_size)
+        sections.append(section)
+
+
+
+
 input = "input/testcase0.def"
+
+n_nets = 8
 
 DRIVER_PINS_ID, DRIVER_PINS_COORD, PINS_ID, PINS_COORD = input_data(input)
 
 centers = get_clusters(PINS_COORD, 4)
 
 plot_coord((PINS_COORD, DRIVER_PINS_COORD, centers))
+
+
