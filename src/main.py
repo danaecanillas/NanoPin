@@ -178,16 +178,16 @@ def exec(in_path, n_nets = 16, out_path = None):
 
     p = get_p(DRIVER_PINS_COORD)
 
-    nets_old = net_classification_old(PINS_COORD, n_nets, p)
-    nets = net_classification(PINS_COORD, n_nets, p)
-
     #plot_coord((PINS_COORD, DRIVER_PINS_COORD, centers))
 
-    # COLORS = []
-    # for section in nets:
-    #     COLORS.append([PINS_COORD[id] for id in section])
+    nets = net_classification(PINS_COORD, n_nets, p)
 
-    # plot_coord(COLORS, DRIVER_PINS_COORD)
+    COLORS = []
+    for section in nets:
+        COLORS.append([PINS_COORD[id] for id in section])
+
+    #plot_coord(COLORS)
+
 
     subsections = get_subsections(nets_old, PINS_COORD, p)
 
