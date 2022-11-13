@@ -5,7 +5,7 @@ def read(input_file):
     PINS_COORD = []
     with open (input_file, "r") as def_file:
         for line in def_file:
-            if "DIRECTION INPUT" in line:
+            if "DIRECTION" in line:
                 DRIVER_PINS_ID.append(line.split(" +")[0].split("- ")[1])
             elif "FIX " in line:
                 coord = line.split("( ")[1].split(" )")[0]

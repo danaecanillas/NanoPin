@@ -64,7 +64,7 @@ def net_classification(PINS_COORD, n_nets, p):
 
     if len(sections) > n_nets:
         sections[-2] += sections[-1]
-    sections.pop()
+        sections.pop()
 
     return sections
 
@@ -115,11 +115,28 @@ def get_chains(PINS_COORD, DRIVER_PINS_COORD, sections, p):
 
             chain += [tuple(down_dists[i][0:2]) for i in range(len(down_dists))]
 
-        chain.append((section_id, DRIVER_PINS_COORD[section_id+16]))
+        chain.append((section_id+16, DRIVER_PINS_COORD[section_id+16]))
 
         chains[section_id] = chain
 
     return chains
+
+
+
+def find_loop(chains, PINS_ID):
+    visited = [False]*len(PINS_ID)
+    found = False
+
+    for ch, chain in enumerate(chains):
+        i = 1
+        while not found and i < len(chain) - 1:
+            pin_id = chain[i][0]
+            found = visited[pin_id]
+            visited[pin_id] = True
+            i += 1
+        if found:
+            print("Miiiiic a la cadena", ch)
+        
 
 
 
@@ -182,16 +199,18 @@ def exec(in_path, n_nets = 16, out_path = None):
 
     nets = net_classification(PINS_COORD, n_nets, p)
 
+    # print of the map
     COLORS = []
     for section in nets:
         COLORS.append([PINS_COORD[id] for id in section])
 
-    #plot_coord(COLORS)
+    plot_coord(COLORS, DRIVER_PINS_COORD)
 
-
-    subsections = get_subsections(nets_old, PINS_COORD, p)
+    subsections = get_subsections(nets, PINS_COORD, p)
 
     chains = get_chains(PINS_COORD, DRIVER_PINS_COORD, subsections, p)
+
+    find_loop(chains, PINS_ID)
 
     dists = compute_dists(chains)
 
@@ -203,7 +222,7 @@ def exec(in_path, n_nets = 16, out_path = None):
 
 
 
-in_path = "../input/testcase4.def"
+in_path = "../input/priv_testcase3.def"
 n_nets = 16
-out_path = "../output/testcase4_16.def"
+out_path = "../output/priv_testcase3_16.def"
 exec(in_path, n_nets, out_path)
