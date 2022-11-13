@@ -18,23 +18,55 @@ def get_p(DRIVER_PINS_COORD):
 
 
 
-def net_classification(PINS_COORD, n_nets, p):
+def get_angle(pin, p):
+    # angle between x and p w.r.t. p horizontal
+    delta_0 = pin[0] - p[0]
+    delta_1 = pin[1] - p[1]
+    if delta_0 == 0:
+        if delta_1 > 0:
+            ang = pi/2
+        else:
+            ang = -pi/2
+    else:
+        tan_ang = delta_1 / delta_0
+        ang = np.arctan(tan_ang)
+    return ang
+
+
+
+def net_classification_old(PINS_COORD, n_nets, p):
     # out: list of points for every section
     section_size = pi/n_nets
     sections = [[] for i in range(n_nets)]
     
-    for i, (x, y) in enumerate(PINS_COORD):
-        delta_0 = x - p[0]
-        delta_1 = y - p[1]
-        tan_ang = delta_1 / delta_0
-        ang = np.arctan(tan_ang)
-        #print(ang*180/pi)
+    for i, pin in enumerate(PINS_COORD):
+        ang = get_angle(pin, p)
+
         section = int((pi/2-ang)/section_size)
-        #print(section)
         sections[section].append(i)
 
     return sections
 
+
+def net_classification(PINS_COORD, n_nets, p):
+    # out: list of points for every section
+    angles = []
+    for i, pin in enumerate(PINS_COORD):
+        ang = get_angle(pin, p)
+        angles.append((i, ang))
+    
+    angles.sort(key = lambda x: x[1])
+    pins = [pin[0] for pin in angles]
+
+    net_size = len(PINS_COORD) // n_nets
+
+    sections = [pins[i*net_size : (i+1)*net_size] for i in range((len(PINS_COORD) + net_size - 1) // net_size )]
+
+    if len(sections) > n_nets:
+        sections[-2] += sections[-1]
+    sections.pop()
+
+    return sections
 
 
 def get_subsections(nets, PINS_COORD, p):
@@ -47,17 +79,9 @@ def get_subsections(nets, PINS_COORD, p):
         lower_points_angle = []
         bisectriu = np.mean([pi/n_nets * angle_id, pi/n_nets * (angle_id+1)])
         for pin in section:
-            x, y = PINS_COORD[pin]
-            delta_0 = x - p[0]
-            delta_1 = y - p[1]
-            if delta_0 == 0:
-                if delta_1 > 0:
-                    ang = pi/2
-                else:
-                    ang = -pi/2
-            else:
-                tan_ang = delta_1 / delta_0
-                ang = np.arctan(tan_ang)
+            pin_coord = PINS_COORD[pin]
+            ang = get_angle(pin_coord, p)
+
             if ang < bisectriu:
                 upper_points_angle.append(pin)
             else:
@@ -78,7 +102,7 @@ def get_chains(PINS_COORD, DRIVER_PINS_COORD, sections, p):
         if len(up) > 0:
             up_dists = []
             for pin_id in up:
-                up_dists.append((pin_id, PINS_COORD[pin_id], euclidean(PINS_COORD[pin_id], p)))
+                up_dists.append((pin_id, PINS_COORD[pin_id], euclidean(PINS_COORD[pin_id], p))) #distance can be changed
             up_dists.sort(key = lambda x: x[2])
 
             chain += [tuple(up_dists[i][0:2]) for i in range(len(up_dists))]
@@ -86,7 +110,7 @@ def get_chains(PINS_COORD, DRIVER_PINS_COORD, sections, p):
         if len(down) > 0:
             down_dists = []
             for pin_id in down:
-                down_dists.append((pin_id, PINS_COORD[pin_id], euclidean(PINS_COORD[pin_id], p)))
+                down_dists.append((pin_id, PINS_COORD[pin_id], euclidean(PINS_COORD[pin_id], p))) #distance can be changed
             down_dists.sort(key = lambda x: x[2], reverse = True)
 
             chain += [tuple(down_dists[i][0:2]) for i in range(len(down_dists))]
@@ -116,7 +140,9 @@ def compute_dists(chains):
     return dists
 
 
+
 def get_output(chains, DRIVER_PINS_ID, PINS_ID, output_file, net_name = "Nano_NET"):
+    # writes output file
     f = open(output_file, "w")
     for ch_id, chain in enumerate(chains):
         if len(chain) > 2:
@@ -139,26 +165,31 @@ def get_output(chains, DRIVER_PINS_ID, PINS_ID, output_file, net_name = "Nano_NE
     f.close()
 
 
-def exec(input):
-    #os.chdir("src")
-    n_nets = 8
 
-    DRIVER_PINS_ID, DRIVER_PINS_COORD, PINS_ID, PINS_COORD = read(input)
+def exec(in_path, n_nets = 16, out_path = None):
+    if not out_path:
+        input_name = in_path.split("/")[-1].split(".def")[0]
+        out_path = "../output/" + input_name + "_" + str(n_nets) + "_out.def"
+
+    if os.getcwd().split("/")[-1] != "src":
+        os.chdir("src")
+
+    DRIVER_PINS_ID, DRIVER_PINS_COORD, PINS_ID, PINS_COORD = read(in_path)
 
     p = get_p(DRIVER_PINS_COORD)
 
-    #plot_coord((PINS_COORD, DRIVER_PINS_COORD, centers))
-
+    nets_old = net_classification_old(PINS_COORD, n_nets, p)
     nets = net_classification(PINS_COORD, n_nets, p)
 
-    COLORS = []
-    for section in nets:
-        COLORS.append([PINS_COORD[id] for id in section])
+    #plot_coord((PINS_COORD, DRIVER_PINS_COORD, centers))
 
-    #plot_coord(COLORS)
+    # COLORS = []
+    # for section in nets:
+    #     COLORS.append([PINS_COORD[id] for id in section])
 
+    # plot_coord(COLORS, DRIVER_PINS_COORD)
 
-    subsections = get_subsections(nets, PINS_COORD, p)
+    subsections = get_subsections(nets_old, PINS_COORD, p)
 
     chains = get_chains(PINS_COORD, DRIVER_PINS_COORD, subsections, p)
 
@@ -167,11 +198,12 @@ def exec(input):
     print(dists)
     print(final_metrics(dists))
 
-    get_output(chains, DRIVER_PINS_ID, PINS_ID, "xavi_prova.def", net_name = "Nano_NET")
+    get_output(chains, DRIVER_PINS_ID, PINS_ID, out_path, net_name = "Nano_NET")
 
 
 
 
-
-input = "../input/testcase3.def"
-exec(input)
+in_path = "../input/testcase4.def"
+n_nets = 16
+out_path = "../output/testcase4_16.def"
+exec(in_path, n_nets, out_path)
