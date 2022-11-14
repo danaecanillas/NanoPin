@@ -2,13 +2,18 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from math import pi
+import time
 
-#from read_input import read
-#from metrics import euclidean, manhattan, final_metrics
+from read_input import read
+from metrics import euclidean, manhattan, final_metrics
+from map import plot_coord
 
 
 
 def get_p(DRIVER_PINS_COORD):
+    '''
+    gets point that will be used to compute angles
+    '''
     driver_pins_min_y = np.mean([coord[1] for coord in DRIVER_PINS_COORD[:16]])
     driver_pins_max_y = np.mean([coord[1] for coord in DRIVER_PINS_COORD[16:]])
 
@@ -17,9 +22,10 @@ def get_p(DRIVER_PINS_COORD):
     return (0, p)
 
 
-
 def get_angle(pin, p):
-    # angle between x and p w.r.t. p horizontal
+    '''
+    computes angle between x and p w.r.t. y = p_y
+    '''
     delta_0 = pin[0] - p[0]
     delta_1 = pin[1] - p[1]
     if delta_0 == 0:
@@ -33,9 +39,10 @@ def get_angle(pin, p):
     return ang
 
 
-
 def net_classification_old(PINS_COORD, n_nets, p):
-    # out: list of points for every section
+    '''
+    creates a list of lists, containing the pins in every section. Uses fix angle
+    '''
     section_size = pi/n_nets
     sections = [[] for i in range(n_nets)]
     
@@ -49,7 +56,9 @@ def net_classification_old(PINS_COORD, n_nets, p):
 
 
 def net_classification(PINS_COORD, n_nets, p):
-    # out: list of points for every section
+    '''
+    creates a list of lists, containing the pins in every section. Equal number of points for every section
+    '''
     angles = []
     for i, pin in enumerate(PINS_COORD):
         ang = get_angle(pin, p)
@@ -70,7 +79,10 @@ def net_classification(PINS_COORD, n_nets, p):
 
 
 def get_subsections(nets, PINS_COORD, p):
-    # out: [(section1u, section1d), (section2u, section2d), ...] where every sectionXY is the points in section X up/down
+    '''
+    subdivides section lists into 2 lists
+    - out: [(section1u, section1d), ...] where sectionXY are the points in section X up/down
+    '''
     n_nets = len(nets)
     classification = [[]]*n_nets
 
@@ -91,96 +103,101 @@ def get_subsections(nets, PINS_COORD, p):
     return classification
 
 
-
 def get_chains(PINS_COORD, DRIVER_PINS_COORD, sections, p):
-    # output: list of [(id1, coord1), (id_2, coord2), ...] for every section
+    '''
+    creates a chain of pins for every section
+    '''
     chains = [[]]*len(sections)
     for section_id, (up, down) in enumerate(sections):
         chain = []
-        chain.append((section_id, DRIVER_PINS_COORD[section_id]))
+        chain.append(section_id)
 
         if len(up) > 0:
             up_dists = []
             for pin_id in up:
-                up_dists.append((pin_id, PINS_COORD[pin_id], euclidean(PINS_COORD[pin_id], p))) #distance can be changed
-            up_dists.sort(key = lambda x: x[2])
+                up_dists.append((pin_id, euclidean(PINS_COORD[pin_id], p))) #distance can be changed
+            up_dists.sort(key = lambda x: x[1])
 
-            chain += [tuple(up_dists[i][0:2]) for i in range(len(up_dists))]
+            chain += [pin[0] for pin in up_dists]
 
         if len(down) > 0:
             down_dists = []
             for pin_id in down:
-                down_dists.append((pin_id, PINS_COORD[pin_id], euclidean(PINS_COORD[pin_id], p))) #distance can be changed
-            down_dists.sort(key = lambda x: x[2], reverse = True)
+                down_dists.append((pin_id , euclidean(PINS_COORD[pin_id], p))) #distance can be changed
+            down_dists.sort(key = lambda x: x[1], reverse = True)
 
-            chain += [tuple(down_dists[i][0:2]) for i in range(len(down_dists))]
+            chain += [pin[0] for pin in down_dists]
 
-        chain.append((section_id+16, DRIVER_PINS_COORD[section_id+16]))
-
+        chain.append(section_id+16)
         chains[section_id] = chain
 
     return chains
 
 
-
 def find_loop(chains, PINS_ID):
+    '''
+    checks whether there is a pin visited multiple times
+    '''
     visited = [False]*len(PINS_ID)
     found = False
 
     for ch, chain in enumerate(chains):
         i = 1
         while not found and i < len(chain) - 1:
-            pin_id = chain[i][0]
+            pin_id = chain[i]
             found = visited[pin_id]
             visited[pin_id] = True
             i += 1
         if found:
-            print("Miiiiic a la cadena", ch)
-        
+            print(pin_id, "is visited for a second time in", ch)
 
 
-
-def compute_dists(chains):
-    # output: list of distance for every section
+def compute_dists(chains, DRIVER_PINS_COORD, PINS_COORD):
+    '''
+    creates a list with the length of every chain
+    '''
     dists = []
 
     for chain in chains:
-        if len(chain) == 2:
+        n = len(chain)
+        if n == 2:
             dists.append(0) #empty section
         else:
-            dist = 0
-            for pin_id in range(1, len(chain)):
-                dist += manhattan(chain[pin_id-1][1], chain[pin_id][1])
-
-            dists.append(dist)
+            dist = manhattan(DRIVER_PINS_COORD[chain[0]], PINS_COORD[chain[1]])
+            for pin_id in range(2, n-1):
+                dist += manhattan(PINS_COORD[chain[pin_id]], PINS_COORD[chain[pin_id]])
+            dist = manhattan(PINS_COORD[chain[n-2]], DRIVER_PINS_COORD[chain[n-1]])
+            
+            dists.append(dist)            
 
     return dists
 
 
-
 def get_output(chains, DRIVER_PINS_ID, PINS_ID, output_file, net_name = "Nano_NET"):
-    # writes output file
+    '''
+    writes output file
+    '''
     f = open(output_file, "w")
     for ch_id, chain in enumerate(chains):
-        if len(chain) > 2:
+        n = len(chain)
+        if n > 2:
             f.write("- " + net_name + "\n")
-            f.write("  ( " + DRIVER_PINS_ID[chain[0][0]] + " conn_in )"+ "\n")
-            f.write("  ( " + PINS_ID[chain[1][0]] + " conn_out )"+ "\n")
+            f.write("  ( " + DRIVER_PINS_ID[chain[0]] + " conn_in )"+ "\n")
+            f.write("  ( " + PINS_ID[chain[1]] + " conn_out )"+ "\n")
             f.write(";"+ "\n")
 
-            for pin_id in range(2, len(chain)-1):
+            for pin_id in range(2, n-1):
                 f.write("- " + net_name+ "\n")
-                f.write("  ( " + PINS_ID[chain[pin_id-1][0]] + " conn_in )"+ "\n")
-                f.write("  ( " + PINS_ID[chain[pin_id][0]] + " conn_out )"+ "\n")
+                f.write("  ( " + PINS_ID[chain[pin_id-1]] + " conn_in )"+ "\n")
+                f.write("  ( " + PINS_ID[chain[pin_id]] + " conn_out )"+ "\n")
                 f.write(";"+ "\n")
             
             f.write("- " + net_name+ "\n")
-            f.write("  ( " + PINS_ID[chain[len(chain)-2][0]] + " conn_in )"+ "\n")
-            f.write("  ( " + DRIVER_PINS_ID[chain[len(chain)-1][0]] + " conn_out )"+ "\n")
+            f.write("  ( " + PINS_ID[chain[n-2]] + " conn_in )"+ "\n")
+            f.write("  ( " + DRIVER_PINS_ID[chain[n-1]] + " conn_out )"+ "\n")
             f.write(";"+ "\n")
     
     f.close()
-
 
 
 def exec(in_path, n_nets = 16, out_path = None):
@@ -192,19 +209,21 @@ def exec(in_path, n_nets = 16, out_path = None):
         os.chdir("src")
 
     DRIVER_PINS_ID, DRIVER_PINS_COORD, PINS_ID, PINS_COORD = read(in_path)
+    a = time.time()
 
     p = get_p(DRIVER_PINS_COORD)
-
-    #plot_coord((PINS_COORD, DRIVER_PINS_COORD, centers))
+    #plot_coord(PINS_COORD, DRIVER_PINS_COORD)
 
     nets = net_classification(PINS_COORD, n_nets, p)
-
+    
+    '''
     # print of the map
     COLORS = []
     for section in nets:
         COLORS.append([PINS_COORD[id] for id in section])
 
     plot_coord(COLORS, DRIVER_PINS_COORD)
+    '''
 
     subsections = get_subsections(nets, PINS_COORD, p)
 
@@ -212,8 +231,10 @@ def exec(in_path, n_nets = 16, out_path = None):
 
     find_loop(chains, PINS_ID)
 
-    dists = compute_dists(chains)
+    dists = compute_dists(chains, DRIVER_PINS_COORD, PINS_COORD)
 
+    b = time.time()
+    print("Execution time: %.3fs" %(b-a))
     print(dists)
     print(final_metrics(dists))
 
@@ -222,7 +243,6 @@ def exec(in_path, n_nets = 16, out_path = None):
 
 
 
-in_path = "../input/priv_testcase3.def"
+in_path = "../input/testcase0.def"
 n_nets = 16
-out_path = "../output/priv_testcase3_16.def"
-exec(in_path, n_nets, out_path)
+exec(in_path, n_nets)
